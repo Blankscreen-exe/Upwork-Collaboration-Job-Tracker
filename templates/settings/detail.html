@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Settings Version: {{ version.name }}</h1>
+    <div>
+        {% if not version.is_active %}
+        <form method="POST" action="/settings/{{ version.id }}/activate" class="d-inline">
+            <button type="submit" class="btn btn-success">Activate</button>
+        </form>
+        {% endif %}
+        <a href="/settings/{{ version.id }}/clone" class="btn btn-secondary">Clone</a>
+    </div>
+</div>
+
+{% if version.is_active %}
+<div class="alert alert-success">
+    <strong>This version is currently active.</strong>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Version Information</h5>
+    </div>
+    <div class="card-body">
+        <p><strong>Created:</strong> {{ version.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        {% if version.notes %}
+        <p><strong>Notes:</strong> {{ version.notes }}</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>Rules (JSON)</h5>
+    </div>
+    <div class="card-body">
+        <pre class="bg-light p-3"><code>{{ rules_json }}</code></pre>
+    </div>
+</div>
+
+<div class="mt-4">
+    <a href="/settings" class="btn btn-secondary">Back to Settings</a>
+</div>
+{% endblock %}

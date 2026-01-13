@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>{{ worker.name }} ({{ worker.worker_code }})</h1>
+    <div>
+        <a href="/workers/{{ worker.id }}/edit" class="btn btn-secondary">Edit</a>
+        <form method="POST" action="/workers/{{ worker.id }}/archive" class="d-inline">
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Archive this worker?')">Archive</button>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Total Earned</h5>
+                <h3 class="text-success">${{ "%.2f"|format(totals.earned) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Total Paid</h5>
+                <h3 class="text-primary">${{ "%.2f"|format(totals.paid) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Due</h5>
+                <h3 class="text-danger">${{ "%.2f"|format(totals.due) }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if worker.contact %}
+<p><strong>Contact:</strong> {{ worker.contact }}</p>
+{% endif %}
+
+{% if worker.notes %}
+<p><strong>Notes:</strong> {{ worker.notes }}</p>
+{% endif %}
+
+<h3 class="mt-4">Allocations by Job</h3>
+{% if allocations_by_job %}
+<div class="table-responsive">
+    <table class="table data-table">
+        <thead>
+            <tr>
+                <th>Job</th>
+                <th>Label</th>
+                <th>Share Type</th>
+                <th>Share Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job_data in allocations_by_job %}
+            {% for alloc in job_data.allocations %}
+            <tr>
+                <td><a href="/jobs/{{ job_data.job.id }}">{{ job_data.job.job_code }} - {{ job_data.job.title }}</a></td>
+                <td>{{ alloc.label }}</td>
+                <td>{{ alloc.share_type.value }}</td>
+                <td>
+                    {% if alloc.share_type.value == "percent" %}
+                    {{ "%.1f"|format(alloc.share_value * 100) }}%
+                    {% else %}
+                    ${{ "%.2f"|format(alloc.share_value) }}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="text-muted">No allocations found.</p>
+{% endif %}
+
+<h3 class="mt-4">Payments</h3>
+{% if payments %}
+<div class="table-responsive">
+    <table class="table data-table">
+        <thead>
+            <tr>
+                <th>Payment Code</th>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Job</th>
+                <th>Method</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for payment in payments %}
+            <tr>
+                <td>{{ payment.payment_code }}</td>
+                <td>{{ payment.paid_date }}</td>
+                <td>${{ "%.2f"|format(payment.amount_paid) }}</td>
+                <td>
+                    {% if payment.job %}
+                    <a href="/jobs/{{ payment.job.id }}">{{ payment.job.job_code }}</a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>{{ payment.method or "-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="text-muted">No payments found.</p>
+{% endif %}
+{% endblock %}

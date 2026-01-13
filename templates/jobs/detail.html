@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>{{ job.job_code }} - {{ job.title }}</h1>
+    <div class="d-flex gap-2">
+        {% if not job.is_finalized %}
+        <a href="/jobs/{{ job.id }}/edit" class="btn btn-secondary" style="min-width: 100px;">Edit</a>
+        {% endif %}
+        <form method="POST" action="/jobs/{{ job.id }}/archive" class="d-inline">
+            <button type="submit" class="btn btn-danger" style="min-width: 100px;" onclick="return confirm('Archive this job?')">Archive</button>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Job Information</h5>
+                <p><strong>Client:</strong> {{ job.client_name or "-" }}</p>
+                <p><strong>Type:</strong> <span class="badge bg-info">{{ job.job_type.value }}</span></p>
+                <p><strong>Status:</strong> <span class="badge bg-secondary">{{ job.status.value }}</span></p>
+                {% if job.is_finalized %}
+                <p><strong>Status:</strong> <span class="badge bg-warning">Finalized</span></p>
+                {% endif %}
+                <p><strong>Settings Version:</strong> {{ job.settings_version.name }}</p>
+                {% if job.connects_used %}
+                <p><strong>Connects Used:</strong> {{ job.connects_used }}</p>
+                {% endif %}
+                <div class="d-flex gap-2 mt-2">
+                    <a href="{{ job.job_post_url }}" target="_blank" class="btn btn-primary btn-sm">
+                        <i class="bi bi-box-arrow-up-right"></i> Open in Upwork
+                    </a>
+                    {% if job.upwork_contract_id %}
+                    <a href="https://www.upwork.com/nx/wm/workroom/{{ job.upwork_contract_id }}/overview" target="_blank" class="btn btn-secondary btn-sm">
+                        <i class="bi bi-box-arrow-up-right"></i> Open Contract
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Upwork Identifiers</h5>
+                <p><strong>Job ID:</strong> {{ job.upwork_job_id or "-" }}</p>
+                <p><strong>Contract ID:</strong> {{ job.upwork_contract_id or "-" }}</p>
+                <p><strong>Offer ID:</strong> {{ job.upwork_offer_id or "-" }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Total Received</h5>
+                <h3 class="text-success">${{ "%.2f"|format(totals.total_received) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Connect Deduction</h5>
+                <h3 class="text-warning">${{ "%.2f"|format(totals.connect_deduction) }}</h3>
+                {% if connects_used %}
+                <small class="text-muted">{{ connects_used }} connects × ${{ "%.2f"|format(connect_cost_per_unit) }}</small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Platform Fee</h5>
+                <h3 class="text-info">${{ "%.2f"|format(totals.platform_fee) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Net Distributable</h5>
+                <h3 class="text-primary">${{ "%.2f"|format(totals.net_distributable) }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h3 class="mt-4">Receipts</h3>
+{% if not job.is_finalized %}
+<div class="mb-3">
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addReceiptModal">Add Receipt</button>
+</div>
+{% endif %}
+<div class="table-responsive">
+    <table class="table data-table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Source</th>
+                <th>Transaction ID</th>
+                <th>Notes</th>
+                {% if not job.is_finalized %}
+                <th>Actions</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for receipt in receipts %}
+            <tr>
+                <td>{{ receipt.received_date }}</td>
+                <td>${{ "%.2f"|format(receipt.amount_received) }}</td>
+                <td>{{ receipt.source.value }}</td>
+                <td>{{ receipt.upwork_transaction_id or "-" }}</td>
+                <td>{{ receipt.notes or "-" }}</td>
+                {% if not job.is_finalized %}
+                <td>
+                    <a href="/receipts/{{ receipt.id }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                    <form method="POST" action="/receipts/{{ receipt.id }}/delete" class="d-inline" onsubmit="return confirm('Delete this receipt?')">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<h3 class="mt-4">Allocations</h3>
+{% if not job.is_finalized %}
+<div class="mb-3">
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAllocationModal">Add Allocation</button>
+</div>
+{% endif %}
+<div class="table-responsive">
+    <table class="table data-table">
+        <thead>
+            <tr>
+                <th>Worker</th>
+                <th>Label</th>
+                <th>Role</th>
+                <th>Share Type</th>
+                <th>Share Value</th>
+                <th>Earned</th>
+                {% if not job.is_finalized %}
+                <th>Actions</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for result in allocation_results %}
+            <tr>
+                <td>
+                    {% if result.allocation.worker %}
+                    <a href="/workers/{{ result.allocation.worker.id }}">{{ result.allocation.worker.name }}</a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>{{ result.allocation.label }}</td>
+                <td>{{ result.allocation.role or "-" }}</td>
+                <td>{{ result.allocation.share_type.value }}</td>
+                <td>
+                    {% if result.allocation.share_type.value == "percent" %}
+                    {{ "%.1f"|format(result.allocation.share_value * 100) }}%
+                    {% else %}
+                    ${{ "%.2f"|format(result.allocation.share_value) }}
+                    {% endif %}
+                </td>
+                <td><strong>${{ "%.2f"|format(result.earned) }}</strong></td>
+                {% if not job.is_finalized %}
+                <td>
+                    <button class="btn btn-sm btn-secondary" onclick="editAllocation({{ result.allocation.id }})">Edit</button>
+                    <form method="POST" action="/allocations/{{ result.allocation.id }}/delete" class="d-inline" onsubmit="return confirm('Delete this allocation?')">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<h3 class="mt-4">Payments</h3>
+<div class="mb-3">
+    <a href="/payments/new?job_id={{ job.id }}" class="btn btn-primary btn-sm">Add Payment</a>
+</div>
+<div class="table-responsive">
+    <table class="table data-table">
+        <thead>
+            <tr>
+                <th>Payment Code</th>
+                <th>Worker</th>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Reference</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for payment in payments %}
+            <tr>
+                <td>{{ payment.payment_code }}</td>
+                <td><a href="/workers/{{ payment.worker.id }}">{{ payment.worker.name }}</a></td>
+                <td>{{ payment.paid_date }}</td>
+                <td>${{ "%.2f"|format(payment.amount_paid) }}</td>
+                <td>{{ payment.method or "-" }}</td>
+                <td>
+                    {% if payment.is_auto_generated or payment.method == "Auto-generated" %}
+                    <span class="badge bg-info">Auto</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Manual</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if payment.is_paid %}
+                    <span class="badge bg-success">Paid</span>
+                    {% else %}
+                    <span class="badge bg-warning">Pending</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if payment.reference %}
+                    <small class="text-muted">{{ payment.reference }}</small>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>
+                    {% if not payment.is_paid %}
+                    <form method="POST" action="/payments/{{ payment.id }}/mark-paid" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-success" title="Mark as paid">✓</button>
+                    </form>
+                    {% else %}
+                    <form method="POST" action="/payments/{{ payment.id }}/mark-unpaid" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-warning" title="Mark as unpaid">↺</button>
+                    </form>
+                    {% endif %}
+                    <a href="/payments/{{ payment.id }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                    <form method="POST" action="/payments/{{ payment.id }}/delete" class="d-inline" onsubmit="return confirm('Delete this payment?')">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if not job.is_finalized %}
+<div class="mt-4">
+    <form method="POST" action="/jobs/{{ job.id }}/finalize" onsubmit="return confirm('Finalize this job? This will create a snapshot and prevent further edits.')">
+        <button type="submit" class="btn btn-warning">Finalize Job</button>
+    </form>
+</div>
+{% else %}
+<div class="mt-4">
+    <form method="POST" action="/jobs/{{ job.id }}/unfinalize" onsubmit="return confirm('Unfinalize this job? This will allow edits but remove the snapshot.')">
+        <button type="submit" class="btn btn-warning">Unfinalize Job</button>
+    </form>
+</div>
+{% endif %}
+
+<!-- Add Receipt Modal -->
+<div class="modal fade" id="addReceiptModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Receipt</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="/jobs/{{ job.id }}/receipts/new">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="received_date" class="form-label">Received Date *</label>
+                        <input type="date" class="form-control" id="received_date" name="received_date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="amount_received" class="form-label">Amount *</label>
+                        <input type="number" step="0.01" class="form-control" id="amount_received" name="amount_received" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="source" class="form-label">Source *</label>
+                        <select class="form-select" id="source" name="source" required>
+                            <option value="milestone">Milestone</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="bonus">Bonus</option>
+                            <option value="manual">Manual</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="upwork_transaction_id" class="form-label">Upwork Transaction ID</label>
+                        <input type="text" class="form-control" id="upwork_transaction_id" name="upwork_transaction_id">
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Receipt</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Allocation Modal -->
+<div class="modal fade" id="addAllocationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Allocation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="/jobs/{{ job.id }}/allocations/new">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="worker_id" class="form-label">Worker (leave empty for admin/you)</label>
+                        <select class="form-select" id="worker_id" name="worker_id">
+                            <option value="None">None (Admin/You)</option>
+                            {% for worker in workers %}
+                            <option value="{{ worker.id }}">{{ worker.name }} ({{ worker.worker_code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="label" class="form-label">Label *</label>
+                        <input type="text" class="form-control" id="label" name="label" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="role" class="form-label">Role</label>
+                        <input type="text" class="form-control" id="role" name="role">
+                    </div>
+                    <div class="mb-3">
+                        <label for="share_type" class="form-label">Share Type *</label>
+                        <select class="form-select" id="share_type" name="share_type" required>
+                            <option value="percent">Percent</option>
+                            <option value="fixed_amount">Fixed Amount</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="share_value" class="form-label">Share Value *</label>
+                        <input type="number" step="0.01" class="form-control" id="share_value" name="share_value" required>
+                        <small class="form-text text-muted">For percent, enter as decimal (e.g., 0.5 for 50%)</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Allocation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+function editAllocation(allocId) {
+    // TODO: Implement edit allocation modal
+    window.location.href = '/allocations/' + allocId + '/edit';
+}
+</script>
+{% endblock %}
+{% endblock %}

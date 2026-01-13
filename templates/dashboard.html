@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="mb-4">Dashboard</h1>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Total Received</h5>
+                <h3 class="text-success">${{ "%.2f"|format(totals.total_received) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Total Connects</h5>
+                <h3 class="text-warning">${{ "%.2f"|format(totals.total_connects) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Platform Fee</h5>
+                <h3 class="text-info">${{ "%.2f"|format(totals.total_platform_fee) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Total Paid</h5>
+                <h3 class="text-primary">${{ "%.2f"|format(totals.total_paid) }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Total Due</h5>
+                <h2 class="text-danger">${{ "%.2f"|format(totals.total_due) }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Top Due Workers</h5>
+            </div>
+            <div class="card-body">
+                {% if worker_dues %}
+                <table class="table data-table">
+                    <thead>
+                        <tr>
+                            <th>Worker</th>
+                            <th>Due</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in worker_dues %}
+                        <tr>
+                            <td><a href="/workers/{{ item.worker.id }}">{{ item.worker.name }}</a></td>
+                            <td class="text-danger">${{ "%.2f"|format(item.due) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted">No workers with outstanding dues.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Recent Jobs</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_jobs %}
+                <table class="table data-table">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Title</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in recent_jobs %}
+                        <tr>
+                            <td>{{ job.job_code }}</td>
+                            <td><a href="/jobs/{{ job.id }}">{{ job.title }}</a></td>
+                            <td><span class="badge bg-secondary">{{ job.status.value }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted">No recent jobs.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Payments</h1>
+    <a href="/payments/new" class="btn btn-primary">New Payment</a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Filters</h5>
+    </div>
+    <div class="card-body">
+        <form method="GET" action="/payments" class="row g-3">
+            <div class="col-md-3">
+                <label for="worker_id" class="form-label">Worker</label>
+                <select class="form-select" id="worker_id" name="worker_id">
+                    <option value="">All Workers</option>
+                    {% for worker in workers %}
+                    <option value="{{ worker.id }}" {% if filter_worker_id and filter_worker_id == worker.id %}selected{% endif %}>
+                        {{ worker.name }} ({{ worker.worker_code }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="job_id" class="form-label">Job</label>
+                <select class="form-select" id="job_id" name="job_id">
+                    <option value="">All Jobs</option>
+                    {% for job in jobs %}
+                    <option value="{{ job.id }}" {% if filter_job_id and filter_job_id == job.id %}selected{% endif %}>
+                        {{ job.job_code }} - {{ job.title }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="date_from" class="form-label">Date From</label>
+                <input type="date" class="form-control" id="date_from" name="date_from" value="{{ filter_date_from or '' }}">
+            </div>
+            <div class="col-md-2">
+                <label for="date_to" class="form-label">Date To</label>
+                <input type="date" class="form-control" id="date_to" name="date_to" value="{{ filter_date_to or '' }}">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary me-2">Apply Filters</button>
+                <a href="/payments" class="btn btn-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<table class="table table-striped data-table">
+    <thead>
+        <tr>
+            <th>Payment Code</th>
+            <th>Worker</th>
+            <th>Job</th>
+            <th>Date</th>
+            <th>Amount</th>
+            <th>Method</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for payment in payments %}
+        <tr>
+            <td>{{ payment.payment_code }}</td>
+            <td><a href="/workers/{{ payment.worker.id }}">{{ payment.worker.name }}</a></td>
+            <td>
+                {% if payment.job %}
+                <a href="/jobs/{{ payment.job.id }}">{{ payment.job.job_code }}</a>
+                {% else %}
+                -
+                {% endif %}
+            </td>
+            <td>{{ payment.paid_date }}</td>
+            <td>${{ "%.2f"|format(payment.amount_paid) }}</td>
+            <td>{{ payment.method or "-" }}</td>
+            <td>
+                {% if payment.is_auto_generated or payment.method == "Auto-generated" %}
+                <span class="badge bg-info">Auto</span>
+                {% else %}
+                <span class="badge bg-secondary">Manual</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if payment.is_paid %}
+                <span class="badge bg-success">Paid</span>
+                {% else %}
+                <span class="badge bg-warning">Pending</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if not payment.is_paid %}
+                <form method="POST" action="/payments/{{ payment.id }}/mark-paid" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-success" title="Mark as paid">✓</button>
+                </form>
+                {% else %}
+                <form method="POST" action="/payments/{{ payment.id }}/mark-unpaid" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-warning" title="Mark as unpaid">↺</button>
+                </form>
+                {% endif %}
+                <a href="/payments/{{ payment.id }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                <form method="POST" action="/payments/{{ payment.id }}/delete" class="d-inline" onsubmit="return confirm('Delete this payment?')">
+                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

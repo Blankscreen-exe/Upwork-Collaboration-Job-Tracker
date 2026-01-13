@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="mb-4">{% if job %}Edit{% else %}New{% endif %} Job</h1>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<form method="POST" action="{% if job %}/jobs/{{ job.id }}/edit{% else %}/jobs/new{% endif %}">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="job_code" class="form-label">Job Code</label>
+                <input type="text" class="form-control" id="job_code" name="job_code" value="{{ job.job_code if job else (suggested_code if suggested_code else '') }}" placeholder="{{ suggested_code if suggested_code else 'Auto-generated if left empty' }}">
+                <small class="form-text text-muted">Leave empty to auto-generate ({{ suggested_code if suggested_code else 'next available' }})</small>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="title" class="form-label">Title *</label>
+                <input type="text" class="form-control" id="title" name="title" value="{{ job.title if job else '' }}" required>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mb-3">
+        <label for="client_name" class="form-label">Client Name</label>
+        <input type="text" class="form-control" id="client_name" name="client_name" value="{{ job.client_name if job else '' }}">
+    </div>
+    
+    <div class="mb-3">
+        <label for="job_post_url" class="form-label">Job Post URL *</label>
+        <input type="url" class="form-control" id="job_post_url" name="job_post_url" value="{{ job.job_post_url if job else '' }}" required>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-4">
+            <div class="mb-3">
+                <label for="upwork_job_id" class="form-label">Upwork Job ID</label>
+                <input type="text" class="form-control" id="upwork_job_id" name="upwork_job_id" value="{{ job.upwork_job_id if job else '' }}">
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="mb-3">
+                <label for="upwork_contract_id" class="form-label">Upwork Contract ID</label>
+                <input type="text" class="form-control" id="upwork_contract_id" name="upwork_contract_id" value="{{ job.upwork_contract_id if job else '' }}">
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="mb-3">
+                <label for="upwork_offer_id" class="form-label">Upwork Offer ID</label>
+                <input type="text" class="form-control" id="upwork_offer_id" name="upwork_offer_id" value="{{ job.upwork_offer_id if job else '' }}">
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-4">
+            <div class="mb-3">
+                <label for="job_type" class="form-label">Job Type *</label>
+                <select class="form-select" id="job_type" name="job_type" required>
+                    <option value="fixed" {% if job and job.job_type.value == 'fixed' %}selected{% endif %}>Fixed</option>
+                    <option value="hourly" {% if job and job.job_type.value == 'hourly' %}selected{% endif %}>Hourly</option>
+                </select>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="mb-3">
+                <label for="status" class="form-label">Status *</label>
+                <select class="form-select" id="status" name="status" required>
+                    <option value="draft" {% if job and job.status.value == 'draft' %}selected{% endif %}>Draft</option>
+                    <option value="active" {% if job and job.status.value == 'active' %}selected{% endif %}>Active</option>
+                    <option value="completed" {% if job and job.status.value == 'completed' %}selected{% endif %}>Completed</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="start_date" class="form-label">Start Date</label>
+                <input type="date" class="form-control" id="start_date" name="start_date" value="{{ job.start_date if job else '' }}">
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="end_date" class="form-label">End Date</label>
+                <input type="date" class="form-control" id="end_date" name="end_date" value="{{ job.end_date if job else '' }}">
+            </div>
+        </div>
+    </div>
+    
+    <div class="mb-3">
+        <label for="connects_used" class="form-label">Connects Used</label>
+        <input type="number" class="form-control" id="connects_used" name="connects_used" value="{{ job.connects_used if job else '' }}" min="0" step="1">
+        <small class="form-text text-muted">Number of connects used for this job</small>
+    </div>
+    
+    {% if not job %}
+    <div class="alert alert-info">
+        <strong>Settings Version:</strong> {{ active_settings_version.name }} (will be attached automatically)
+    </div>
+    {% endif %}
+    
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{% if job %}/jobs/{{ job.id }}{% else %}/jobs{% endif %}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}

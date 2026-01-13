@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="mb-4">{% if worker %}Edit{% else %}New{% endif %} Worker</h1>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<form method="POST" action="{% if worker %}/workers/{{ worker.id }}/edit{% else %}/workers/new{% endif %}">
+    <div class="mb-3">
+        <label for="worker_code" class="form-label">Worker Code</label>
+        <input type="text" class="form-control" id="worker_code" name="worker_code" value="{{ worker.worker_code if worker else (suggested_code if suggested_code else '') }}" placeholder="{{ suggested_code if suggested_code else 'Auto-generated if left empty' }}">
+        <small class="form-text text-muted">Leave empty to auto-generate ({{ suggested_code if suggested_code else 'next available' }})</small>
+    </div>
+    
+    <div class="mb-3">
+        <label for="name" class="form-label">Name *</label>
+        <input type="text" class="form-control" id="name" name="name" value="{{ worker.name if worker else '' }}" required>
+    </div>
+    
+    <div class="mb-3">
+        <label for="contact" class="form-label">Contact</label>
+        <input type="text" class="form-control" id="contact" name="contact" value="{{ worker.contact if worker else '' }}">
+    </div>
+    
+    <div class="mb-3">
+        <label for="notes" class="form-label">Notes</label>
+        <textarea class="form-control" id="notes" name="notes" rows="3">{{ worker.notes if worker else '' }}</textarea>
+    </div>
+    
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{% if worker %}/workers/{{ worker.id }}{% else %}/workers{% endif %}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}

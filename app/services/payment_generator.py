@@ -1,0 +1,149 @@
+from decimal import Decimal
+from typing import List
+from sqlalchemy.orm import Session
+from app.models import Receipt, Job, JobAllocation, Payment, SettingsVersion
+from app.services.calculations import get_settings_rules, quantize_decimal
+from app.utils import generate_payment_code
+
+def generate_payments_from_receipt(receipt: Receipt, job: Job, db: Session) -> List[Payment]:
+    """
+    Generate payment entries for each worker allocation when a receipt is added.
+    Returns list of created Payment records.
+    """
+    # Get all allocations for this job
+    allocations = db.query(JobAllocation).filter(JobAllocation.job_id == job.id).all()
+    
+    if not allocations:
+        return []  # No allocations, no payments to generate
+    
+    # Get settings rules
+    rules = get_settings_rules(job.settings_version)
+    
+    # Calculate deductions for this single receipt
+    # Connect deduction - based on connects used (distributed per receipt)
+    # If multiple receipts, we need to calculate connect cost per receipt
+    # For now, we'll calculate total connects cost and distribute evenly, or use connects per receipt
+    # Since connects are per job, we'll calculate the total connect cost for the job
+    # and distribute it proportionally across receipts based on amount
+    connects_used = job.connects_used or 0
+    connect_cost_per_unit = Decimal(str(rules.get("connect_cost_per_unit", 0)))
+    total_connect_cost = Decimal(connects_used) * connect_cost_per_unit
+    
+    # Get all receipts for this job to calculate proportional share
+    all_receipts = db.query(Receipt).filter(Receipt.job_id == job.id).all()
+    total_received_all = sum((Decimal(str(r.amount_received)) for r in all_receipts), Decimal(0))
+    
+    if total_received_all > 0:
+        # Distribute connect cost proportionally based on receipt amount
+        receipt_share = receipt.amount_received / total_received_all
+        connect_deduction = total_connect_cost * receipt_share
+    else:
+        # If no other receipts, this receipt gets the full connect cost
+        connect_deduction = total_connect_cost
+    
+    connect_deduction = quantize_decimal(connect_deduction)
+    
+    # Platform fee
+    platform_fee = Decimal(0)
+    platform_fee_enabled = job.platform_fee_override_enabled
+    if platform_fee_enabled is None:
+        platform_fee_enabled = rules.get("platform_fee", {}).get("enabled", False)
+    
+    if platform_fee_enabled:
+        platform_fee_mode = job.platform_fee_override_mode or rules.get("platform_fee", {}).get("mode", "percent")
+        platform_fee_value = job.platform_fee_override_value or Decimal(str(rules.get("platform_fee", {}).get("value", 0)))
+        platform_fee_apply_on = job.platform_fee_override_apply_on or rules.get("platform_fee", {}).get("apply_on", "net")
+        
+        if platform_fee_apply_on == "gross":
+            base_amount = receipt.amount_received
+        else:  # net
+            base_amount = receipt.amount_received - connect_deduction
+        
+        if platform_fee_mode == "percent":
+            platform_fee = base_amount * platform_fee_value
+        else:  # fixed
+            platform_fee = platform_fee_value
+        
+        platform_fee = quantize_decimal(platform_fee)
+    
+    # Net distributable from this receipt
+    net_distributable = receipt.amount_received - connect_deduction - platform_fee
+    net_distributable = quantize_decimal(net_distributable)
+    
+    # Generate payments for each worker allocation
+    created_payments = []
+    
+    # First pass: calculate which allocations will create payments and their shares
+    payment_data = []
+    for alloc in allocations:
+        # Skip allocations without workers (admin/you allocations)
+        if not alloc.worker_id:
+            continue
+        
+        # Calculate worker's share from this receipt
+        if alloc.share_type == "percent":
+            worker_share = net_distributable * Decimal(str(alloc.share_value))
+        else:  # fixed_amount
+            # For fixed, cap at distributable amount if it exceeds
+            worker_share = min(Decimal(str(alloc.share_value)), net_distributable)
+        
+        worker_share = quantize_decimal(worker_share)
+        
+        # Only create payment if share is positive
+        if worker_share > 0:
+            payment_data.append({
+                "allocation": alloc,
+                "share": worker_share
+            })
+    
+    # Generate all payment codes upfront to avoid duplicates
+    import re
+    max_num = 0
+    # Check existing payments in database
+    existing_payments = db.query(Payment).all()
+    for payment in existing_payments:
+        match = re.match(r'P(\d+)', payment.payment_code)
+        if match:
+            num = int(match.group(1))
+            max_num = max(max_num, num)
+    
+    # Check pending payments in session (newly added but not committed)
+    # SQLAlchemy session.new contains objects to be inserted
+    for obj in list(db.new):  # Convert to list to avoid modification during iteration
+        if isinstance(obj, Payment):
+            match = re.match(r'P(\d+)', obj.payment_code)
+            if match:
+                num = int(match.group(1))
+                max_num = max(max_num, num)
+    
+    # Generate codes for all payments we'll create
+    generated_codes = []
+    for i in range(len(payment_data)):
+        next_code = f"P{max_num + 1 + i:04d}"
+        generated_codes.append(next_code)
+    
+    # Now create payments using the pre-generated codes
+    for i, data in enumerate(payment_data):
+        alloc = data["allocation"]
+        worker_share = data["share"]
+        
+        # Use pre-generated payment code
+        payment_code = generated_codes[i]
+        
+        # Create payment entry
+        payment = Payment(
+            payment_code=payment_code,
+            worker_id=alloc.worker_id,
+            job_id=job.id,
+            amount_paid=worker_share,
+            paid_date=receipt.received_date,
+            method="Auto-generated",
+            reference=f"Receipt #{receipt.id}",
+            notes=f"Auto-generated from receipt: {receipt.source}",
+            is_auto_generated=True,
+            is_paid=False  # Not paid yet, just calculated
+        )
+        db.add(payment)
+        created_payments.append(payment)
+    
+    return created_payments
