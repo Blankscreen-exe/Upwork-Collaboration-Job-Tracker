@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_DIR = Path(__file__).parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 class Settings:
     ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "admin123")

@@ -13,9 +13,10 @@ from app.services.calculations import get_job_totals, compute_allocations, get_s
 from app.dependencies import get_db_session
 from app.utils import generate_job_code
 from app.services.payment_generator import generate_payments_from_receipt
+from app.config import BASE_DIR
 
 router = APIRouter()
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 def get_active_settings_version(db: Session) -> SettingsVersion:
     """Get the currently active settings version"""

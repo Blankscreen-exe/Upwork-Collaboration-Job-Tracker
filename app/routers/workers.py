@@ -9,9 +9,10 @@ from app.schemas import WorkerCreate, WorkerUpdate
 from app.services.calculations import compute_worker_totals
 from app.dependencies import get_db_session
 from app.utils import generate_worker_code
+from app.config import BASE_DIR
 
 router = APIRouter()
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 @router.get("/workers", response_class=HTMLResponse)
 async def list_workers(request: Request, db: Session = Depends(get_db_session)):

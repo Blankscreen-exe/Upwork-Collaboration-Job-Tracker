@@ -7,9 +7,10 @@ import json
 from app.database import get_db
 from app.models import SettingsVersion
 from app.dependencies import get_db_session
+from app.config import BASE_DIR
 
 router = APIRouter()
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 @router.get("/settings", response_class=HTMLResponse)
 async def list_settings(request: Request, db: Session = Depends(get_db_session)):

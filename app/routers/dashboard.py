@@ -7,9 +7,10 @@ from app.database import get_db
 from app.services.calculations import get_dashboard_totals, compute_worker_totals
 from app.models import Worker, Job
 from app.dependencies import get_db_session
+from app.config import BASE_DIR
 
 router = APIRouter()
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, db: Session = Depends(get_db_session)):
