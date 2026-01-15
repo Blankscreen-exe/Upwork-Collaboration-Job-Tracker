@@ -142,3 +142,79 @@ This allows you to track what workers have earned vs. what you've actually paid 
 - **Auto-Generated Payments**: Payments created from receipts are preserved even if receipts are deleted (for historical tracking).
 - **Payment History**: Deleting a receipt does NOT delete associated payments to maintain payment history.
 - **Allocation Validation**: Percent allocations can be created incrementally, but cannot exceed 1.0 total.
+
+## Troubleshooting
+
+### PDF Generation Issues (GTK Runtime on Windows)
+
+If you encounter errors when generating PDF invoices (e.g., "cannot load library 'gobject-2.0-0'"), you need to install the GTK+ runtime libraries for Windows.
+
+#### Solution 1: Install GTK3 Runtime
+
+1. **Download GTK3 Runtime:**
+   - Visit: https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases
+   - Download the latest GTK3 runtime installer (e.g., `gtk3-runtime-3.24.31-2022-01-04-ts-win64.exe`)
+
+2. **Install GTK3 Runtime:**
+   - Run the installer
+   - Install to the default location (typically `C:\Program Files\GTK3-Runtime Win64\`)
+
+3. **Add to System PATH (Optional but Recommended):**
+   - Open System Properties → Environment Variables
+   - Edit the `Path` variable
+   - Add: `C:\Program Files\GTK3-Runtime Win64\bin` (or your installation path)
+   - Click OK and restart your terminal/PowerShell
+
+4. **Restart the Application:**
+   - Close and restart your terminal/PowerShell
+   - Restart the application
+
+#### Solution 2: Verify GTK Installation
+
+To check if GTK is properly installed and accessible:
+
+```powershell
+# Check if GTK DLLs exist
+Test-Path "C:\Program Files\GTK3-Runtime Win64\bin\gobject-2.0-0.dll"
+
+# Or check your installation path
+Get-ChildItem "C:\Program Files\GTK3-Runtime Win64\bin\*.dll" | Select-Object Name
+```
+
+#### Solution 3: Manual PATH Configuration
+
+If GTK is installed but not detected automatically:
+
+1. **Find your GTK installation path** (common locations):
+   - `C:\Program Files\GTK3-Runtime Win64\bin`
+   - `C:\gtk3-runtime-3.24.31-2022-01-04-ts-win64\bin`
+   - `C:\GTK\bin`
+
+2. **Add to System PATH:**
+   - Open System Properties → Environment Variables
+   - Add the `bin` folder path to your system PATH
+   - Restart your terminal
+
+#### Solution 4: Application Auto-Detection
+
+The application automatically searches for GTK in common installation locations. If GTK is installed in a non-standard location:
+
+1. Add the GTK `bin` folder to your system PATH
+2. Restart the application
+3. The application will detect it automatically
+
+#### Common Errors
+
+- **"cannot load library 'gobject-2.0-0'"**: GTK runtime is not installed or not in PATH
+- **"PDF generation is not available"**: WeasyPrint cannot find GTK dependencies
+- **"Error 0x7e"**: Missing or corrupted GTK DLL files
+
+#### Alternative: Disable PDF Generation
+
+If you don't need PDF generation, the application will run normally without GTK. PDF generation features will simply be unavailable, but all other features work fine.
+
+#### Additional Resources
+
+- [WeasyPrint Installation Guide](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation)
+- [WeasyPrint Troubleshooting](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#troubleshooting)
+- [GTK for Windows Runtime](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer)
