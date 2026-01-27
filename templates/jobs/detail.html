@@ -18,6 +18,9 @@
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title">Job Information</h5>
+                {% if job.source %}
+                <p><strong>Source:</strong> <span class="badge bg-primary">{{ job.source.value|title }}</span></p>
+                {% endif %}
                 <p><strong>Client:</strong> {{ job.client_name or "-" }}</p>
                 <p><strong>Type:</strong> <span class="badge bg-info">{{ job.job_type.value }}</span></p>
                 <p><strong>Status:</strong> <span class="badge bg-secondary">{{ job.status.value }}</span></p>
@@ -30,7 +33,18 @@
                 {% endif %}
                 <div class="d-flex gap-2 mt-2">
                     <a href="{{ job.job_post_url }}" target="_blank" class="btn btn-primary btn-sm">
-                        <i class="bi bi-box-arrow-up-right"></i> Open in Upwork
+                        <i class="bi bi-box-arrow-up-right"></i> 
+                        {% if job.source and job.source.value == "upwork" %}
+                            Open in Upwork
+                        {% elif job.source and job.source.value == "freelancer" %}
+                            Open in Freelancer
+                        {% elif job.source and job.source.value == "linkedin" %}
+                            Open in LinkedIn
+                        {% elif job.source and job.source.value == "fiverr" %}
+                            Open in Fiverr
+                        {% else %}
+                            Open Job Post
+                        {% endif %}
                     </a>
                     {% if job.upwork_contract_id %}
                     <a href="https://www.upwork.com/nx/wm/workroom/{{ job.upwork_contract_id }}/overview" target="_blank" class="btn btn-secondary btn-sm">
@@ -44,14 +58,102 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title">Upwork Identifiers</h5>
-                <p><strong>Job ID:</strong> {{ job.upwork_job_id or "-" }}</p>
-                <p><strong>Contract ID:</strong> {{ job.upwork_contract_id or "-" }}</p>
-                <p><strong>Offer ID:</strong> {{ job.upwork_offer_id or "-" }}</p>
+                <h5 class="card-title">Company Details</h5>
+                {% if job.company_name %}
+                <p><strong>Company:</strong> {{ job.company_name }}</p>
+                {% endif %}
+                {% if job.company_website %}
+                <p><strong>Website:</strong> <a href="{{ job.company_website }}" target="_blank">{{ job.company_website }}</a></p>
+                {% endif %}
+                {% if job.company_email %}
+                <p><strong>Email:</strong> <a href="mailto:{{ job.company_email }}">{{ job.company_email }}</a></p>
+                {% endif %}
+                {% if job.company_phone %}
+                <p><strong>Phone:</strong> <a href="tel:{{ job.company_phone }}">{{ job.company_phone }}</a></p>
+                {% endif %}
+                {% if job.company_address %}
+                <p><strong>Address:</strong> {{ job.company_address }}</p>
+                {% endif %}
+                {% if job.client_notes %}
+                <p><strong>Notes:</strong> {{ job.client_notes }}</p>
+                {% endif %}
+                {% if not job.company_name and not job.company_website and not job.company_email and not job.company_phone and not job.company_address and not job.client_notes %}
+                <p class="text-muted">No company details provided.</p>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
+
+<!-- Job Description Section -->
+{% if job.description %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Job Description</h5>
+                <div class="job-description" style="max-height: 500px; overflow-y: auto;">
+                    {{ job.description|safe }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Cover Letter Section (Collapsible) -->
+{% if job.cover_letter %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <button class="btn btn-link text-decoration-none text-dark p-0" type="button" data-bs-toggle="collapse" data-bs-target="#coverLetterCollapse" aria-expanded="false" aria-controls="coverLetterCollapse">
+                        Cover Letter <i class="bi bi-chevron-down"></i>
+                    </button>
+                </h5>
+            </div>
+            <div class="collapse" id="coverLetterCollapse">
+                <div class="card-body">
+                    <div class="cover-letter" style="max-height: 500px; overflow-y: auto;">
+                        {{ job.cover_letter|safe }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Upwork Identifiers (if applicable) -->
+{% if job.upwork_job_id or job.upwork_contract_id or job.upwork_offer_id %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Upwork Identifiers</h5>
+                <div class="row">
+                    {% if job.upwork_job_id %}
+                    <div class="col-md-4">
+                        <p><strong>Job ID:</strong> {{ job.upwork_job_id }}</p>
+                    </div>
+                    {% endif %}
+                    {% if job.upwork_contract_id %}
+                    <div class="col-md-4">
+                        <p><strong>Contract ID:</strong> {{ job.upwork_contract_id }}</p>
+                    </div>
+                    {% endif %}
+                    {% if job.upwork_offer_id %}
+                    <div class="col-md-4">
+                        <p><strong>Offer ID:</strong> {{ job.upwork_offer_id }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <div class="row mb-4">
     <div class="col-md-3">
@@ -299,6 +401,40 @@
                             <option value="manual">Manual</option>
                         </select>
                     </div>
+                    
+                    <!-- Allocation Selection -->
+                    {% if allocations %}
+                    <div class="mb-3">
+                        <label class="form-label">Allocate to Workers</label>
+                        <div class="form-text mb-2">Select which workers should receive money from this receipt. If none selected, all workers will receive based on their allocation percentages.</div>
+                        <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                            {% for alloc in allocations %}
+                                {% if alloc.worker_id %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" 
+                                           name="selected_allocations" 
+                                           value="{{ alloc.id }}" 
+                                           id="modal_alloc_{{ alloc.id }}"
+                                           checked>
+                                    <label class="form-check-label" for="modal_alloc_{{ alloc.id }}">
+                                        <strong>{{ alloc.label }}</strong>
+                                        {% if alloc.worker %}
+                                            ({{ alloc.worker.name }} - {{ alloc.worker.worker_code }})
+                                        {% endif %}
+                                        - 
+                                        {% if alloc.share_type == "percent" %}
+                                            {{ (alloc.share_value * 100)|round(1) }}%
+                                        {% else %}
+                                            ${{ "%.2f"|format(alloc.share_value) }}
+                                        {% endif %}
+                                    </label>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
                     <div class="mb-3">
                         <label for="upwork_transaction_id" class="form-label">Upwork Transaction ID</label>
                         <input type="text" class="form-control" id="upwork_transaction_id" name="upwork_transaction_id">

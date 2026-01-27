@@ -7,7 +7,7 @@ from decimal import Decimal
 import json
 from datetime import date
 from app.database import get_db
-from app.models import Job, Receipt, JobAllocation, SettingsVersion, JobCalculationSnapshot, Worker, Payment
+from app.models import Job, Receipt, JobAllocation, SettingsVersion, JobCalculationSnapshot, Worker, Payment, JobSource
 from app.schemas import JobCreate
 from app.services.calculations import get_job_totals, compute_allocations, get_settings_rules
 from app.dependencies import get_db_session
@@ -53,6 +53,15 @@ async def create_job(
     title: str = Form(...),
     client_name: str = Form(None),
     job_post_url: str = Form(...),
+    source: str = Form(None),
+    description: str = Form(None),
+    cover_letter: str = Form(None),
+    company_name: str = Form(None),
+    company_website: str = Form(None),
+    company_email: str = Form(None),
+    company_phone: str = Form(None),
+    company_address: str = Form(None),
+    client_notes: str = Form(None),
     upwork_job_id: str = Form(None),
     upwork_contract_id: str = Form(None),
     upwork_offer_id: str = Form(None),
@@ -86,11 +95,28 @@ async def create_job(
     
     connects_used_int = int(connects_used) if connects_used and connects_used.strip() else None
     
+    # Convert source string to enum if provided
+    source_enum = None
+    if source and source.strip():
+        try:
+            source_enum = JobSource(source.strip().lower())
+        except ValueError:
+            source_enum = None
+    
     job = Job(
         job_code=job_code,
         title=title,
         client_name=client_name if client_name else None,
         job_post_url=job_post_url,
+        source=source_enum,
+        description=description if description and description.strip() else None,
+        cover_letter=cover_letter if cover_letter and cover_letter.strip() else None,
+        company_name=company_name.strip() if company_name and company_name.strip() else None,
+        company_website=company_website.strip() if company_website and company_website.strip() else None,
+        company_email=company_email.strip() if company_email and company_email.strip() else None,
+        company_phone=company_phone.strip() if company_phone and company_phone.strip() else None,
+        company_address=company_address.strip() if company_address and company_address.strip() else None,
+        client_notes=client_notes.strip() if client_notes and client_notes.strip() else None,
         upwork_job_id=upwork_job_id if upwork_job_id else None,
         upwork_contract_id=upwork_contract_id if upwork_contract_id else None,
         upwork_offer_id=upwork_offer_id if upwork_offer_id else None,
@@ -201,6 +227,15 @@ async def update_job(
     title: str = Form(...),
     client_name: str = Form(None),
     job_post_url: str = Form(...),
+    source: str = Form(None),
+    description: str = Form(None),
+    cover_letter: str = Form(None),
+    company_name: str = Form(None),
+    company_website: str = Form(None),
+    company_email: str = Form(None),
+    company_phone: str = Form(None),
+    company_address: str = Form(None),
+    client_notes: str = Form(None),
     upwork_job_id: str = Form(None),
     upwork_contract_id: str = Form(None),
     upwork_offer_id: str = Form(None),
@@ -231,10 +266,27 @@ async def update_job(
             "error": f"Job code {job_code} already exists"
         }, status_code=400)
     
+    # Convert source string to enum if provided
+    source_enum = None
+    if source and source.strip():
+        try:
+            source_enum = JobSource(source.strip().lower())
+        except ValueError:
+            source_enum = None
+    
     job.job_code = job_code
     job.title = title
     job.client_name = client_name if client_name else None
     job.job_post_url = job_post_url
+    job.source = source_enum
+    job.description = description if description and description.strip() else None
+    job.cover_letter = cover_letter if cover_letter and cover_letter.strip() else None
+    job.company_name = company_name.strip() if company_name and company_name.strip() else None
+    job.company_website = company_website.strip() if company_website and company_website.strip() else None
+    job.company_email = company_email.strip() if company_email and company_email.strip() else None
+    job.company_phone = company_phone.strip() if company_phone and company_phone.strip() else None
+    job.company_address = company_address.strip() if company_address and company_address.strip() else None
+    job.client_notes = client_notes.strip() if client_notes and client_notes.strip() else None
     job.upwork_job_id = upwork_job_id if upwork_job_id else None
     job.upwork_contract_id = upwork_contract_id if upwork_contract_id else None
     job.upwork_offer_id = upwork_offer_id if upwork_offer_id else None
@@ -267,8 +319,11 @@ async def create_receipt(
     source: str = Form(...),
     upwork_transaction_id: str = Form(None),
     notes: str = Form(None),
+    selected_allocations: list = Form(None),  # New parameter for selected allocations
     db: Session = Depends(get_db_session)
 ):
+    import json
+    
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -276,13 +331,24 @@ async def create_receipt(
     if job.is_finalized:
         raise HTTPException(status_code=400, detail="Cannot add receipts to finalized job")
     
+    # Convert selected allocations to JSON string
+    selected_allocation_ids_json = None
+    if selected_allocations:
+        try:
+            # Convert to integers and store as JSON
+            allocation_ids = [int(aid) for aid in selected_allocations]
+            selected_allocation_ids_json = json.dumps(allocation_ids)
+        except (ValueError, TypeError):
+            selected_allocation_ids_json = None
+    
     receipt = Receipt(
         job_id=job_id,
         received_date=date.fromisoformat(received_date),
         amount_received=Decimal(amount_received),
         source=source,
         upwork_transaction_id=upwork_transaction_id if upwork_transaction_id else None,
-        notes=notes if notes else None
+        notes=notes if notes else None,
+        selected_allocation_ids=selected_allocation_ids_json  # New field
     )
     db.add(receipt)
     db.flush()  # Flush to get receipt ID, but don't commit yet
@@ -301,6 +367,8 @@ async def create_receipt(
 
 @router.get("/receipts/{receipt_id}/edit", response_class=HTMLResponse)
 async def edit_receipt_form(request: Request, receipt_id: int, db: Session = Depends(get_db_session)):
+    import json
+    
     receipt = db.query(Receipt).filter(Receipt.id == receipt_id).first()
     if not receipt:
         raise HTTPException(status_code=404, detail="Receipt not found")
@@ -309,10 +377,23 @@ async def edit_receipt_form(request: Request, receipt_id: int, db: Session = Dep
     if job.is_finalized:
         raise HTTPException(status_code=400, detail="Cannot edit receipts in finalized job")
     
+    # Get allocations for this job
+    allocations = db.query(JobAllocation).filter(JobAllocation.job_id == job.id).all()
+    
+    # Parse selected allocation IDs
+    selected_allocation_ids = []
+    if receipt.selected_allocation_ids:
+        try:
+            selected_allocation_ids = json.loads(receipt.selected_allocation_ids)
+        except (json.JSONDecodeError, TypeError):
+            selected_allocation_ids = []
+    
     return templates.TemplateResponse("receipts/form.html", {
         "request": request,
         "receipt": receipt,
-        "job": job
+        "job": job,
+        "allocations": allocations,  # Pass allocations to template
+        "selected_allocation_ids": selected_allocation_ids  # Pass parsed IDs
     })
 
 @router.post("/receipts/{receipt_id}/edit")
@@ -323,8 +404,11 @@ async def update_receipt(
     source: str = Form(...),
     upwork_transaction_id: str = Form(None),
     notes: str = Form(None),
+    selected_allocations: list = Form(None),  # New parameter for selected allocations
     db: Session = Depends(get_db_session)
 ):
+    import json
+    
     receipt = db.query(Receipt).filter(Receipt.id == receipt_id).first()
     if not receipt:
         raise HTTPException(status_code=404, detail="Receipt not found")
@@ -333,12 +417,25 @@ async def update_receipt(
     if job.is_finalized:
         raise HTTPException(status_code=400, detail="Cannot edit receipts in finalized job")
     
+    # Convert selected allocations to JSON string
+    selected_allocation_ids_json = None
+    if selected_allocations:
+        try:
+            # Convert to integers and store as JSON
+            allocation_ids = [int(aid) for aid in selected_allocations]
+            selected_allocation_ids_json = json.dumps(allocation_ids)
+        except (ValueError, TypeError):
+            selected_allocation_ids_json = None
+    
     receipt.received_date = date.fromisoformat(received_date)
     receipt.amount_received = Decimal(amount_received)
     receipt.source = source
     receipt.upwork_transaction_id = upwork_transaction_id if upwork_transaction_id else None
     receipt.notes = notes if notes else None
+    receipt.selected_allocation_ids = selected_allocation_ids_json  # Update selected allocations
     
+    # Note: We don't regenerate payments when editing receipts
+    # Existing payments remain, but new calculations will use the updated allocation selection
     db.commit()
     
     return RedirectResponse(url=f"/jobs/{job.id}", status_code=303)

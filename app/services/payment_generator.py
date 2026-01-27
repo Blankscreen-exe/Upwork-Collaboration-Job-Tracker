@@ -1,5 +1,6 @@
 from decimal import Decimal
 from typing import List
+import json
 from sqlalchemy.orm import Session
 from app.models import Receipt, Job, JobAllocation, Payment, SettingsVersion
 from app.services.calculations import get_settings_rules, quantize_decimal
@@ -7,14 +8,29 @@ from app.utils import generate_payment_code
 
 def generate_payments_from_receipt(receipt: Receipt, job: Job, db: Session) -> List[Payment]:
     """
-    Generate payment entries for each worker allocation when a receipt is added.
+    Generate payment entries for selected worker allocations when a receipt is added.
     Returns list of created Payment records.
     """
     # Get all allocations for this job
-    allocations = db.query(JobAllocation).filter(JobAllocation.job_id == job.id).all()
+    all_allocations = db.query(JobAllocation).filter(JobAllocation.job_id == job.id).all()
     
-    if not allocations:
+    if not all_allocations:
         return []  # No allocations, no payments to generate
+    
+    # Parse selected allocation IDs from receipt
+    selected_allocation_ids = []
+    if receipt.selected_allocation_ids:
+        try:
+            selected_allocation_ids = json.loads(receipt.selected_allocation_ids)
+        except (json.JSONDecodeError, TypeError):
+            selected_allocation_ids = []
+    
+    # Filter allocations: use selected ones, or all if none selected (backward compatibility)
+    if selected_allocation_ids:
+        allocations = [a for a in all_allocations if a.id in selected_allocation_ids]
+    else:
+        # If no selections, use all allocations (default behavior)
+        allocations = all_allocations
     
     # Get settings rules
     rules = get_settings_rules(job.settings_version)
@@ -73,19 +89,50 @@ def generate_payments_from_receipt(receipt: Receipt, job: Job, db: Session) -> L
     # Generate payments for each worker allocation
     created_payments = []
     
+    # Filter allocations to only those with workers
+    worker_allocations = [a for a in allocations if a.worker_id]
+    
+    if not worker_allocations:
+        return []  # No worker allocations, no payments to generate
+    
+    # Calculate total allocation percentage/amount for selected workers
+    # This is used to redistribute funds proportionally among selected workers
+    total_selected_share = Decimal(0)
+    allocation_shares = {}
+    
+    for alloc in worker_allocations:
+        if alloc.share_type == "percent":
+            share_value = Decimal(str(alloc.share_value))
+        else:  # fixed_amount
+            # For fixed amounts, we'll use them as-is for proportional redistribution
+            share_value = Decimal(str(alloc.share_value))
+        
+        allocation_shares[alloc.id] = share_value
+        total_selected_share += share_value
+    
     # First pass: calculate which allocations will create payments and their shares
     payment_data = []
-    for alloc in allocations:
-        # Skip allocations without workers (admin/you allocations)
-        if not alloc.worker_id:
-            continue
+    for alloc in worker_allocations:
+        share_value = allocation_shares[alloc.id]
         
         # Calculate worker's share from this receipt
+        # If allocations were selected, redistribute proportionally among selected workers
         if alloc.share_type == "percent":
-            worker_share = net_distributable * Decimal(str(alloc.share_value))
+            if total_selected_share > 0:
+                # Redistribute: calculate what percentage this worker represents of selected workers
+                # Then apply that percentage to the net distributable
+                worker_percentage = share_value / total_selected_share
+                worker_share = net_distributable * worker_percentage
+            else:
+                worker_share = Decimal(0)
         else:  # fixed_amount
-            # For fixed, cap at distributable amount if it exceeds
-            worker_share = min(Decimal(str(alloc.share_value)), net_distributable)
+            # For fixed amounts, redistribute proportionally based on their relative fixed amounts
+            if total_selected_share > 0:
+                worker_percentage = share_value / total_selected_share
+                # Apply percentage to net distributable
+                worker_share = net_distributable * worker_percentage
+            else:
+                worker_share = Decimal(0)
         
         worker_share = quantize_decimal(worker_share)
         

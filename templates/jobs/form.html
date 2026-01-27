@@ -30,8 +30,82 @@
     </div>
     
     <div class="mb-3">
+        <label for="source" class="form-label">Job Source</label>
+        <select class="form-select" id="source" name="source">
+            <option value="">Select Source</option>
+            <option value="upwork" {% if job and job.source and job.source.value == "upwork" %}selected{% endif %}>Upwork</option>
+            <option value="freelancer" {% if job and job.source and job.source.value == "freelancer" %}selected{% endif %}>Freelancer</option>
+            <option value="linkedin" {% if job and job.source and job.source.value == "linkedin" %}selected{% endif %}>LinkedIn</option>
+            <option value="fiverr" {% if job and job.source and job.source.value == "fiverr" %}selected{% endif %}>Fiverr</option>
+            <option value="direct" {% if job and job.source and job.source.value == "direct" %}selected{% endif %}>Direct</option>
+            <option value="other" {% if job and job.source and job.source.value == "other" %}selected{% endif %}>Other</option>
+        </select>
+    </div>
+    
+    <div class="mb-3">
         <label for="job_post_url" class="form-label">Job Post URL *</label>
         <input type="url" class="form-control" id="job_post_url" name="job_post_url" value="{{ job.job_post_url if job else '' }}" required>
+    </div>
+    
+    <!-- Job Description (Quill.js Editor) -->
+    <div class="mb-3">
+        <label for="description" class="form-label">Job Description</label>
+        <div id="description-editor" style="height: 300px;"></div>
+        <textarea id="description" name="description" style="display: none;">{{ job.description if job and job.description else '' }}</textarea>
+        <small class="form-text text-muted">Rich text editor for job description</small>
+    </div>
+    
+    <!-- Cover Letter (Quill.js Editor) -->
+    <div class="mb-3">
+        <label for="cover_letter" class="form-label">Cover Letter</label>
+        <div id="cover-letter-editor" style="height: 300px;"></div>
+        <textarea id="cover_letter" name="cover_letter" style="display: none;">{{ job.cover_letter if job and job.cover_letter else '' }}</textarea>
+        <small class="form-text text-muted">Cover letter used to apply for this job</small>
+    </div>
+    
+    <!-- Company/Client Details Card -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0">Company/Client Details <small class="text-muted">(Optional)</small></h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="company_name" class="form-label">Company Name <small class="text-muted">(optional)</small></label>
+                        <input type="text" class="form-control" id="company_name" name="company_name" value="{{ job.company_name if job else '' }}">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="company_website" class="form-label">Company Website <small class="text-muted">(optional)</small></label>
+                        <input type="text" class="form-control" id="company_website" name="company_website" value="{{ job.company_website if job else '' }}" placeholder="https://example.com">
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="company_email" class="form-label">Company Email <small class="text-muted">(optional)</small></label>
+                        <input type="text" class="form-control" id="company_email" name="company_email" value="{{ job.company_email if job else '' }}">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="company_phone" class="form-label">Company Phone <small class="text-muted">(optional)</small></label>
+                        <input type="text" class="form-control" id="company_phone" name="company_phone" value="{{ job.company_phone if job else '' }}">
+                    </div>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label for="company_address" class="form-label">Company Address <small class="text-muted">(optional)</small></label>
+                <textarea class="form-control" id="company_address" name="company_address" rows="2">{{ job.company_address if job else '' }}</textarea>
+            </div>
+            <div class="mb-3">
+                <label for="client_notes" class="form-label">Additional Client/Company Notes <small class="text-muted">(optional)</small></label>
+                <textarea class="form-control" id="client_notes" name="client_notes" rows="3">{{ job.client_notes if job else '' }}</textarea>
+            </div>
+        </div>
     </div>
     
     <div class="row">
@@ -107,4 +181,75 @@
     <button type="submit" class="btn btn-primary">Save</button>
     <a href="{% if job %}/jobs/{{ job.id }}{% else %}/jobs{% endif %}" class="btn btn-secondary">Cancel</a>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Initialize DataTables on all tables with class 'data-table'
+    $('table.data-table').DataTable({
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+        order: [],
+        columnDefs: [
+            { orderable: false, targets: -1 } // Disable sorting on last column (Actions)
+        ]
+    });
+    
+    // Initialize Quill.js editors
+    var descriptionEditor = new Quill('#description-editor', {
+        theme: 'snow',
+        modules: {
+            toolbar: [
+                [{ 'header': [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                [{ 'color': [] }, { 'background': [] }],
+                [{ 'align': [] }],
+                ['link', 'image'],
+                ['clean']
+            ]
+        },
+        placeholder: 'Enter job description...'
+    });
+    
+    var coverLetterEditor = new Quill('#cover-letter-editor', {
+        theme: 'snow',
+        modules: {
+            toolbar: [
+                [{ 'header': [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                [{ 'color': [] }, { 'background': [] }],
+                [{ 'align': [] }],
+                ['link'],
+                ['clean']
+            ]
+        },
+        placeholder: 'Enter cover letter...'
+    });
+    
+    // Load existing content into editors from hidden textareas
+    var descriptionTextarea = document.getElementById('description');
+    var coverLetterTextarea = document.getElementById('cover_letter');
+    
+    if (descriptionTextarea && descriptionTextarea.value) {
+        descriptionEditor.root.innerHTML = descriptionTextarea.value;
+    }
+    
+    if (coverLetterTextarea && coverLetterTextarea.value) {
+        coverLetterEditor.root.innerHTML = coverLetterTextarea.value;
+    }
+    
+    // Sync Quill content to hidden textareas before form submission
+    $('form').on('submit', function() {
+        var descriptionHtml = descriptionEditor.root.innerHTML;
+        var coverLetterHtml = coverLetterEditor.root.innerHTML;
+        
+        // Set textarea values with HTML content
+        $('#description').val(descriptionHtml);
+        $('#cover_letter').val(coverLetterHtml);
+    });
+});
+</script>
 {% endblock %}

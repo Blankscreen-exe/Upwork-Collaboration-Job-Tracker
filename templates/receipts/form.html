@@ -21,6 +21,40 @@
             <option value="manual" {% if receipt.source.value == "manual" %}selected{% endif %}>Manual</option>
         </select>
     </div>
+    
+    <!-- Allocation Selection -->
+    {% if allocations %}
+    <div class="mb-3">
+        <label class="form-label">Allocate to Workers</label>
+        <div class="form-text mb-2">Select which workers should receive money from this receipt. If none selected, all workers will receive based on their allocation percentages.</div>
+        <div class="border rounded p-3">
+            {% for alloc in allocations %}
+                {% if alloc.worker_id %}
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" 
+                           name="selected_allocations" 
+                           value="{{ alloc.id }}" 
+                           id="alloc_{{ alloc.id }}"
+                           {% if selected_allocation_ids|length == 0 %}checked{% elif alloc.id in selected_allocation_ids %}checked{% endif %}>
+                    <label class="form-check-label" for="alloc_{{ alloc.id }}">
+                        <strong>{{ alloc.label }}</strong>
+                        {% if alloc.worker %}
+                            ({{ alloc.worker.name }} - {{ alloc.worker.worker_code }})
+                        {% endif %}
+                        - 
+                        {% if alloc.share_type == "percent" %}
+                            {{ (alloc.share_value * 100)|round(1) }}%
+                        {% else %}
+                            ${{ "%.2f"|format(alloc.share_value) }}
+                        {% endif %}
+                    </label>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
     <div class="mb-3">
         <label for="upwork_transaction_id" class="form-label">Upwork Transaction ID</label>
         <input type="text" class="form-control" id="upwork_transaction_id" name="upwork_transaction_id" value="{{ receipt.upwork_transaction_id or '' }}">

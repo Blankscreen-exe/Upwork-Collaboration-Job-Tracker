@@ -33,6 +33,14 @@ class PlatformFeeApplyOn(str, enum.Enum):
     GROSS = "gross"
     NET = "net"
 
+class JobSource(str, enum.Enum):
+    UPWORK = "upwork"
+    FREELANCER = "freelancer"
+    LINKEDIN = "linkedin"
+    FIVERR = "fiverr"
+    DIRECT = "direct"
+    OTHER = "other"
+
 class Worker(Base):
     __tablename__ = "workers"
 
@@ -68,6 +76,21 @@ class Job(Base):
     title = Column(String, nullable=False)
     client_name = Column(String, nullable=True)
     job_post_url = Column(String, nullable=False)
+    
+    # Job source and description
+    source = Column(SQLEnum(JobSource), nullable=True)
+    description = Column(Text, nullable=True)  # HTML content from Quill.js
+    cover_letter = Column(Text, nullable=True)  # HTML content from Quill.js
+    
+    # Company/Client details
+    company_name = Column(String, nullable=True)
+    company_website = Column(String, nullable=True)
+    company_email = Column(String, nullable=True)
+    company_phone = Column(String, nullable=True)
+    company_address = Column(Text, nullable=True)
+    client_notes = Column(Text, nullable=True)
+    
+    # Upwork-specific fields (kept for backward compatibility)
     upwork_job_id = Column(String, nullable=True)
     upwork_contract_id = Column(String, nullable=True)
     upwork_offer_id = Column(String, nullable=True)
@@ -110,6 +133,7 @@ class Receipt(Base):
     source = Column(SQLEnum(ReceiptSource), nullable=False)
     upwork_transaction_id = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
+    selected_allocation_ids = Column(Text, nullable=True)  # JSON string of allocation IDs
 
     job = relationship("Job", back_populates="receipts")
 
