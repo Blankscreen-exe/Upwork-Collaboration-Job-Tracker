@@ -41,6 +41,15 @@ class JobSource(str, enum.Enum):
     DIRECT = "direct"
     OTHER = "other"
 
+class ExpenseCategory(str, enum.Enum):
+    CONNECTS = "connects"
+    TOOLS = "tools"
+    SOFTWARE = "software"
+    SUBSCRIPTION = "subscription"
+    MARKETING = "marketing"
+    OFFICE = "office"
+    OTHER = "other"
+
 class Worker(Base):
     __tablename__ = "workers"
 
@@ -50,6 +59,7 @@ class Worker(Base):
     contact = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
     is_archived = Column(Boolean, default=False)
+    is_owner = Column(Boolean, default=False)  # Mark this worker as the owner/me
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -180,3 +190,18 @@ class JobCalculationSnapshot(Base):
     finalized_at = Column(DateTime, default=datetime.utcnow)
 
     job = relationship("Job", back_populates="snapshot")
+
+class Expense(Base):
+    __tablename__ = "expenses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    expense_code = Column(String, unique=True, index=True, nullable=False)
+    expense_date = Column(Date, nullable=False)
+    amount = Column(Numeric(10, 2), nullable=False)
+    category = Column(SQLEnum(ExpenseCategory), nullable=False)
+    description = Column(String, nullable=False)
+    vendor = Column(String, nullable=True)
+    reference = Column(String, nullable=True)  # receipt/invoice number
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

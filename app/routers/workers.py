@@ -98,6 +98,7 @@ async def create_worker(
     name: str = Form(...),
     contact: str = Form(None),
     notes: str = Form(None),
+    is_owner: str = Form(None),
     db: Session = Depends(get_db_session)
 ):
     # Auto-generate code if not provided
@@ -115,11 +116,19 @@ async def create_worker(
             "error": f"Worker code {worker_code} already exists"
         }, status_code=400)
     
+    # If another worker is already marked as owner, unmark them
+    is_owner_bool = is_owner == "1"
+    if is_owner_bool:
+        existing_owner = db.query(Worker).filter(Worker.is_owner == True, Worker.is_archived == False).first()
+        if existing_owner:
+            existing_owner.is_owner = False
+    
     worker = Worker(
         worker_code=worker_code,
         name=name,
         contact=contact if contact else None,
-        notes=notes if notes else None
+        notes=notes if notes else None,
+        is_owner=is_owner_bool
     )
     db.add(worker)
     db.commit()
@@ -177,6 +186,7 @@ async def update_worker(
     name: str = Form(...),
     contact: str = Form(None),
     notes: str = Form(None),
+    is_owner: str = Form(None),
     db: Session = Depends(get_db_session)
 ):
     worker = db.query(Worker).filter(Worker.id == worker_id).first()
@@ -192,10 +202,18 @@ async def update_worker(
             "error": f"Worker code {worker_code} already exists"
         }, status_code=400)
     
+    # If this worker is being marked as owner, unmark any other owner
+    is_owner_bool = is_owner == "1"
+    if is_owner_bool and not worker.is_owner:
+        existing_owner = db.query(Worker).filter(Worker.is_owner == True, Worker.is_archived == False, Worker.id != worker_id).first()
+        if existing_owner:
+            existing_owner.is_owner = False
+    
     worker.worker_code = worker_code
     worker.name = name
     worker.contact = contact if contact else None
     worker.notes = notes if notes else None
+    worker.is_owner = is_owner_bool
     db.commit()
     
     return RedirectResponse(url=f"/workers/{worker.id}", status_code=303)

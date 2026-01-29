@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from app.models import Worker, Job, Payment
+from app.models import Worker, Job, Payment, Expense
 
 def generate_worker_code(db: Session) -> str:
     """Generate next worker code (W01, W02, etc.)"""
@@ -58,3 +58,22 @@ def generate_payment_code(db: Session) -> str:
             max_num = max(max_num, num)
     
     return f"P{max_num + 1:04d}"
+
+def generate_expense_code(db: Session) -> str:
+    """Generate next expense code (E001, E002, etc.)"""
+    # Get the highest numeric part
+    last_expense = db.query(Expense).order_by(Expense.id.desc()).first()
+    if not last_expense:
+        return "E001"
+    
+    # Try to extract number from existing codes
+    import re
+    max_num = 0
+    expenses = db.query(Expense).all()
+    for expense in expenses:
+        match = re.match(r'E(\d+)', expense.expense_code)
+        if match:
+            num = int(match.group(1))
+            max_num = max(max_num, num)
+    
+    return f"E{max_num + 1:03d}"
