@@ -185,6 +185,15 @@ async def job_detail(request: Request, job_id: int, db: Session = Depends(get_db
     connect_cost_per_unit = Decimal(str(rules.get("connect_cost_per_unit", 0)))
     
     workers = db.query(Worker).filter(Worker.is_archived == False).all()
+    # Convert workers to dictionaries for JSON serialization
+    workers_dict = [
+        {
+            "id": w.id,
+            "name": w.name,
+            "worker_code": w.worker_code
+        }
+        for w in workers
+    ]
     
     return templates.TemplateResponse("jobs/detail.html", {
         "request": request,
@@ -195,7 +204,8 @@ async def job_detail(request: Request, job_id: int, db: Session = Depends(get_db
         "payments": payments,
         "totals": totals,
         "settings_rules": rules,
-        "workers": workers,
+        "workers": workers,  # Keep original for template iteration
+        "workers_json": workers_dict,  # Use this for JSON serialization
         "connects_used": connects_used,
         "connect_cost_per_unit": connect_cost_per_unit
     })
@@ -319,7 +329,10 @@ async def create_receipt(
     source: str = Form(...),
     upwork_transaction_id: str = Form(None),
     notes: str = Form(None),
-    selected_allocations: list = Form(None),  # New parameter for selected allocations
+    selected_allocations: list = Form(None),
+    allocation_mode: str = Form("predefined"),
+    custom_allocations_json: str = Form(None),
+    use_custom_allocations: str = Form("false"),
     db: Session = Depends(get_db_session)
 ):
     import json
@@ -331,15 +344,33 @@ async def create_receipt(
     if job.is_finalized:
         raise HTTPException(status_code=400, detail="Cannot add receipts to finalized job")
     
-    # Convert selected allocations to JSON string
+    # Handle allocation mode
+    use_custom = use_custom_allocations.lower() == "true" or allocation_mode == "custom"
+    
     selected_allocation_ids_json = None
-    if selected_allocations:
-        try:
-            # Convert to integers and store as JSON
-            allocation_ids = [int(aid) for aid in selected_allocations]
-            selected_allocation_ids_json = json.dumps(allocation_ids)
-        except (ValueError, TypeError):
-            selected_allocation_ids_json = None
+    custom_allocations_json_stored = None
+    
+    if use_custom:
+        # Use custom allocations
+        if custom_allocations_json:
+            try:
+                # Validate JSON
+                custom_allocs = json.loads(custom_allocations_json)
+                # Validate structure
+                for alloc in custom_allocs:
+                    if "worker_id" not in alloc or "share_type" not in alloc or "share_value" not in alloc:
+                        raise ValueError("Invalid custom allocation structure")
+                custom_allocations_json_stored = custom_allocations_json
+            except (json.JSONDecodeError, ValueError) as e:
+                raise HTTPException(status_code=400, detail=f"Invalid custom allocations: {str(e)}")
+    else:
+        # Use predefined allocations
+        if selected_allocations:
+            try:
+                allocation_ids = [int(aid) for aid in selected_allocations]
+                selected_allocation_ids_json = json.dumps(allocation_ids)
+            except (ValueError, TypeError):
+                selected_allocation_ids_json = None
     
     receipt = Receipt(
         job_id=job_id,
@@ -348,7 +379,9 @@ async def create_receipt(
         source=source,
         upwork_transaction_id=upwork_transaction_id if upwork_transaction_id else None,
         notes=notes if notes else None,
-        selected_allocation_ids=selected_allocation_ids_json  # New field
+        selected_allocation_ids=selected_allocation_ids_json,
+        use_custom_allocations=use_custom,
+        custom_allocations=custom_allocations_json_stored
     )
     db.add(receipt)
     db.flush()  # Flush to get receipt ID, but don't commit yet
@@ -380,6 +413,18 @@ async def edit_receipt_form(request: Request, receipt_id: int, db: Session = Dep
     # Get allocations for this job
     allocations = db.query(JobAllocation).filter(JobAllocation.job_id == job.id).all()
     
+    # Get workers for custom allocations
+    workers = db.query(Worker).filter(Worker.is_archived == False).all()
+    # Convert workers to dictionaries for JSON serialization
+    workers_dict = [
+        {
+            "id": w.id,
+            "name": w.name,
+            "worker_code": w.worker_code
+        }
+        for w in workers
+    ]
+    
     # Parse selected allocation IDs
     selected_allocation_ids = []
     if receipt.selected_allocation_ids:
@@ -388,12 +433,23 @@ async def edit_receipt_form(request: Request, receipt_id: int, db: Session = Dep
         except (json.JSONDecodeError, TypeError):
             selected_allocation_ids = []
     
+    # Parse custom allocations
+    custom_allocations = []
+    if receipt.custom_allocations:
+        try:
+            custom_allocations = json.loads(receipt.custom_allocations)
+        except (json.JSONDecodeError, TypeError):
+            custom_allocations = []
+    
     return templates.TemplateResponse("receipts/form.html", {
         "request": request,
         "receipt": receipt,
         "job": job,
         "allocations": allocations,  # Pass allocations to template
-        "selected_allocation_ids": selected_allocation_ids  # Pass parsed IDs
+        "selected_allocation_ids": selected_allocation_ids,  # Pass parsed IDs
+        "workers": workers,  # Pass workers for template iteration
+        "workers_json": workers_dict,  # Use this for JSON serialization
+        "custom_allocations": custom_allocations  # Pass custom allocations
     })
 
 @router.post("/receipts/{receipt_id}/edit")
@@ -404,7 +460,10 @@ async def update_receipt(
     source: str = Form(...),
     upwork_transaction_id: str = Form(None),
     notes: str = Form(None),
-    selected_allocations: list = Form(None),  # New parameter for selected allocations
+    selected_allocations: list = Form(None),
+    allocation_mode: str = Form("predefined"),
+    custom_allocations_json: str = Form(None),
+    use_custom_allocations: str = Form("false"),
     db: Session = Depends(get_db_session)
 ):
     import json
@@ -417,22 +476,42 @@ async def update_receipt(
     if job.is_finalized:
         raise HTTPException(status_code=400, detail="Cannot edit receipts in finalized job")
     
-    # Convert selected allocations to JSON string
+    # Handle allocation mode
+    use_custom = use_custom_allocations.lower() == "true" or allocation_mode == "custom"
+    
     selected_allocation_ids_json = None
-    if selected_allocations:
-        try:
-            # Convert to integers and store as JSON
-            allocation_ids = [int(aid) for aid in selected_allocations]
-            selected_allocation_ids_json = json.dumps(allocation_ids)
-        except (ValueError, TypeError):
-            selected_allocation_ids_json = None
+    custom_allocations_json_stored = None
+    
+    if use_custom:
+        # Use custom allocations
+        if custom_allocations_json:
+            try:
+                # Validate JSON
+                custom_allocs = json.loads(custom_allocations_json)
+                # Validate structure
+                for alloc in custom_allocs:
+                    if "worker_id" not in alloc or "share_type" not in alloc or "share_value" not in alloc:
+                        raise ValueError("Invalid custom allocation structure")
+                custom_allocations_json_stored = custom_allocations_json
+            except (json.JSONDecodeError, ValueError) as e:
+                raise HTTPException(status_code=400, detail=f"Invalid custom allocations: {str(e)}")
+    else:
+        # Use predefined allocations
+        if selected_allocations:
+            try:
+                allocation_ids = [int(aid) for aid in selected_allocations]
+                selected_allocation_ids_json = json.dumps(allocation_ids)
+            except (ValueError, TypeError):
+                selected_allocation_ids_json = None
     
     receipt.received_date = date.fromisoformat(received_date)
     receipt.amount_received = Decimal(amount_received)
     receipt.source = source
     receipt.upwork_transaction_id = upwork_transaction_id if upwork_transaction_id else None
     receipt.notes = notes if notes else None
-    receipt.selected_allocation_ids = selected_allocation_ids_json  # Update selected allocations
+    receipt.selected_allocation_ids = selected_allocation_ids_json
+    receipt.use_custom_allocations = use_custom
+    receipt.custom_allocations = custom_allocations_json_stored
     
     # Note: We don't regenerate payments when editing receipts
     # Existing payments remain, but new calculations will use the updated allocation selection

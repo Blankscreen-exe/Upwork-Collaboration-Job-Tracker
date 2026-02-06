@@ -3,7 +3,7 @@
 {% block content %}
 <h1 class="mb-4">Edit Receipt</h1>
 
-<form method="POST" action="/receipts/{{ receipt.id }}/edit">
+<form method="POST" action="/receipts/{{ receipt.id }}/edit" id="receiptForm">
     <div class="mb-3">
         <label for="received_date" class="form-label">Received Date *</label>
         <input type="date" class="form-control" id="received_date" name="received_date" value="{{ receipt.received_date }}" required>
@@ -22,38 +22,76 @@
         </select>
     </div>
     
-    <!-- Allocation Selection -->
-    {% if allocations %}
+    <!-- Allocation Mode Selection -->
     <div class="mb-3">
-        <label class="form-label">Allocate to Workers</label>
-        <div class="form-text mb-2">Select which workers should receive money from this receipt. If none selected, all workers will receive based on their allocation percentages.</div>
-        <div class="border rounded p-3">
-            {% for alloc in allocations %}
-                {% if alloc.worker_id %}
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" 
-                           name="selected_allocations" 
-                           value="{{ alloc.id }}" 
-                           id="alloc_{{ alloc.id }}"
-                           {% if selected_allocation_ids|length == 0 %}checked{% elif alloc.id in selected_allocation_ids %}checked{% endif %}>
-                    <label class="form-check-label" for="alloc_{{ alloc.id }}">
-                        <strong>{{ alloc.label }}</strong>
-                        {% if alloc.worker %}
-                            ({{ alloc.worker.name }} - {{ alloc.worker.worker_code }})
-                        {% endif %}
-                        - 
-                        {% if alloc.share_type == "percent" %}
-                            {{ (alloc.share_value * 100)|round(1) }}%
-                        {% else %}
-                            ${{ "%.2f"|format(alloc.share_value) }}
-                        {% endif %}
-                    </label>
-                </div>
-                {% endif %}
-            {% endfor %}
+        <label class="form-label">Allocation Method</label>
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="allocation_mode" id="mode_predefined" value="predefined" 
+                   {% if not receipt.use_custom_allocations %}checked{% endif %}>
+            <label class="form-check-label" for="mode_predefined">
+                Use Predefined Allocations (from Job)
+            </label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="allocation_mode" id="mode_custom" value="custom"
+                   {% if receipt.use_custom_allocations %}checked{% endif %}>
+            <label class="form-check-label" for="mode_custom">
+                Define Custom Allocation
+            </label>
         </div>
     </div>
-    {% endif %}
+    
+    <!-- Predefined Allocation Selection -->
+    <div id="predefined_allocations_section" {% if receipt.use_custom_allocations %}style="display: none;"{% endif %}>
+        {% if allocations %}
+        <div class="mb-3">
+            <label class="form-label">Allocate to Workers</label>
+            <div class="form-text mb-2">Select which workers should receive money from this receipt. If none selected, all workers will receive based on their allocation percentages.</div>
+            <div class="border rounded p-3">
+                {% for alloc in allocations %}
+                    {% if alloc.worker_id %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" 
+                               name="selected_allocations" 
+                               value="{{ alloc.id }}" 
+                               id="alloc_{{ alloc.id }}"
+                               {% if selected_allocation_ids|length == 0 %}checked{% elif alloc.id in selected_allocation_ids %}checked{% endif %}>
+                        <label class="form-check-label" for="alloc_{{ alloc.id }}">
+                            <strong>{{ alloc.label }}</strong>
+                            {% if alloc.worker %}
+                                ({{ alloc.worker.name }} - {{ alloc.worker.worker_code }})
+                            {% endif %}
+                            - 
+                            {% if alloc.share_type == "percent" %}
+                                {{ (alloc.share_value * 100)|round(1) }}%
+                            {% else %}
+                                ${{ "%.2f"|format(alloc.share_value) }}
+                            {% endif %}
+                        </label>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Custom Allocation Section -->
+    <div id="custom_allocations_section" {% if not receipt.use_custom_allocations %}style="display: none;"{% endif %}>
+        <div class="mb-3">
+            <label class="form-label">Custom Allocations</label>
+            <div class="form-text mb-2">Define how this receipt should be allocated to workers. Total must equal 100% or match the receipt amount.</div>
+            <div id="custom_allocations_container">
+                <!-- Custom allocations will be added here dynamically -->
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="add_custom_allocation">
+                <i class="bi bi-plus"></i> Add Worker
+            </button>
+            <div class="mt-2">
+                <strong>Total: <span id="custom_total_percent">0%</span> / <span id="custom_total_amount">$0.00</span></strong>
+            </div>
+        </div>
+    </div>
     
     <div class="mb-3">
         <label for="upwork_transaction_id" class="form-label">Upwork Transaction ID</label>
@@ -66,4 +104,173 @@
     <button type="submit" class="btn btn-primary">Save</button>
     <a href="/jobs/{{ receipt.job_id }}" class="btn btn-secondary">Cancel</a>
 </form>
+
+{% block scripts %}
+<script>
+// Workers data from backend
+const workers = {{ workers_json|tojson }};
+const receiptAmount = parseFloat({{ receipt.amount_received }});
+const existingCustomAllocations = {{ (custom_allocations|tojson if custom_allocations else [])|tojson }};
+
+// Initialize custom allocations if editing
+let customAllocationIndex = 0;
+if (existingCustomAllocations.length > 0) {
+    existingCustomAllocations.forEach(alloc => {
+        addCustomAllocationRow(alloc.worker_id, alloc.share_type, alloc.share_value);
+    });
+} else {
+    addCustomAllocationRow();
+}
+
+// Toggle between predefined and custom allocations
+document.querySelectorAll('input[name="allocation_mode"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        if (this.value === 'predefined') {
+            document.getElementById('predefined_allocations_section').style.display = 'block';
+            document.getElementById('custom_allocations_section').style.display = 'none';
+        } else {
+            document.getElementById('predefined_allocations_section').style.display = 'none';
+            document.getElementById('custom_allocations_section').style.display = 'block';
+        }
+    });
+});
+
+// Add custom allocation row
+document.getElementById('add_custom_allocation').addEventListener('click', function() {
+    addCustomAllocationRow();
+});
+
+function addCustomAllocationRow(workerId = null, shareType = 'percent', shareValue = '') {
+    const container = document.getElementById('custom_allocations_container');
+    const index = customAllocationIndex++;
+    
+    const row = document.createElement('div');
+    row.className = 'border rounded p-2 mb-2 custom-allocation-row';
+    row.dataset.index = index;
+    
+    row.innerHTML = `
+        <div class="row g-2">
+            <div class="col-md-4">
+                <select class="form-select form-select-sm worker-select" name="custom_allocations[${index}][worker_id]" required>
+                    <option value="">Select Worker</option>
+                    ${workers.map(w => `<option value="${w.id}" ${workerId == w.id ? 'selected' : ''}>${w.name} (${w.worker_code})</option>`).join('')}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select form-select-sm share-type-select" name="custom_allocations[${index}][share_type]">
+                    <option value="percent" ${shareType === 'percent' ? 'selected' : ''}>Percentage</option>
+                    <option value="fixed_amount" ${shareType === 'fixed_amount' ? 'selected' : ''}>Fixed Amount</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <input type="number" step="0.01" class="form-control form-control-sm share-value-input" 
+                       name="custom_allocations[${index}][share_value]" 
+                       value="${shareValue}" 
+                       placeholder="${shareType === 'percent' ? '0-100' : '0.00'}" 
+                       required>
+            </div>
+            <div class="col-md-1">
+                <button type="button" class="btn btn-sm btn-danger remove-allocation" onclick="removeCustomAllocationRow(this)">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(row);
+    
+    // Add event listeners for real-time calculation
+    row.querySelector('.share-type-select').addEventListener('change', updateCustomTotals);
+    row.querySelector('.share-value-input').addEventListener('input', updateCustomTotals);
+    
+    updateCustomTotals();
+}
+
+function removeCustomAllocationRow(button) {
+    button.closest('.custom-allocation-row').remove();
+    updateCustomTotals();
+}
+
+function updateCustomTotals() {
+    const rows = document.querySelectorAll('.custom-allocation-row');
+    let totalPercent = 0;
+    let totalAmount = 0;
+    
+    rows.forEach(row => {
+        const shareType = row.querySelector('.share-type-select').value;
+        const shareValue = parseFloat(row.querySelector('.share-value-input').value) || 0;
+        
+        if (shareType === 'percent') {
+            totalPercent += shareValue;
+        } else {
+            totalAmount += shareValue;
+        }
+    });
+    
+    document.getElementById('custom_total_percent').textContent = totalPercent.toFixed(1) + '%';
+    document.getElementById('custom_total_amount').textContent = '$' + totalAmount.toFixed(2);
+    
+    // Highlight if totals don't match
+    const totalPercentEl = document.getElementById('custom_total_percent');
+    const totalAmountEl = document.getElementById('custom_total_amount');
+    
+    if (totalPercent > 100.1 || totalPercent < 99.9) {
+        totalPercentEl.style.color = 'red';
+    } else {
+        totalPercentEl.style.color = 'green';
+    }
+    
+    if (totalAmount > receiptAmount * 1.01 || totalAmount < receiptAmount * 0.99) {
+        totalAmountEl.style.color = 'red';
+    } else {
+        totalAmountEl.style.color = 'green';
+    }
+}
+
+// Before form submission, convert custom allocations to JSON
+document.getElementById('receiptForm').addEventListener('submit', function(e) {
+    const allocationMode = document.querySelector('input[name="allocation_mode"]:checked').value;
+    
+    if (allocationMode === 'custom') {
+        const rows = document.querySelectorAll('.custom-allocation-row');
+        const customAllocations = [];
+        
+        rows.forEach(row => {
+            const workerId = row.querySelector('.worker-select').value;
+            const shareType = row.querySelector('.share-type-select').value;
+            const shareValue = row.querySelector('.share-value-input').value;
+            
+            if (workerId && shareValue) {
+                customAllocations.push({
+                    worker_id: parseInt(workerId),
+                    share_type: shareType,
+                    share_value: parseFloat(shareValue)
+                });
+            }
+        });
+        
+        // Add hidden input with JSON
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'custom_allocations_json';
+        hiddenInput.value = JSON.stringify(customAllocations);
+        this.appendChild(hiddenInput);
+        
+        // Add hidden input for use_custom_allocations flag
+        const flagInput = document.createElement('input');
+        flagInput.type = 'hidden';
+        flagInput.name = 'use_custom_allocations';
+        flagInput.value = 'true';
+        this.appendChild(flagInput);
+    } else {
+        // Add hidden input to clear custom allocations
+        const flagInput = document.createElement('input');
+        flagInput.type = 'hidden';
+        flagInput.name = 'use_custom_allocations';
+        flagInput.value = 'false';
+        this.appendChild(flagInput);
+    }
+});
+</script>
+{% endblock %}
 {% endblock %}

@@ -144,6 +144,8 @@ class Receipt(Base):
     upwork_transaction_id = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
     selected_allocation_ids = Column(Text, nullable=True)  # JSON string of allocation IDs
+    use_custom_allocations = Column(Boolean, default=False)  # Flag for custom vs predefined allocations
+    custom_allocations = Column(Text, nullable=True)  # JSON string of custom allocations
 
     job = relationship("Job", back_populates="receipts")
 
